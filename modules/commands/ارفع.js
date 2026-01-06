@@ -4,8 +4,8 @@ const fs = require('fs-extra');
 
 module.exports = {
   config: {
-    name: 'admin',
-    version: '1.1',
+    name: 'ارفع',
+    version: 1.1',
     author: 'Hridoy',
     countDown: 5,
     prefix: true,
