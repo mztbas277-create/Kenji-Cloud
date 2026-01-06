@@ -1,6 +1,6 @@
 module.exports = {
   config: {
-    name: 'kick',
+    name: 'بانكاي',
     version: '1.0',
     author: 'Hridoy',
     countDown: 5,
@@ -31,7 +31,7 @@ module.exports = {
       api.removeUserFromGroup(targetID, event.threadID, (err) => {
         if (err) {
           console.error("Failed to kick user:", err);
-          return api.sendMessage('Failed to kick user. Make sure the bot has admin privileges in this group.', event.threadID);
+          return api.sendMessage('  دايرني اطردو بقوت الصداقه'-'؟ .       ارفع ادمن يا ظنج'-'   .', event.threadID);
         }
         api.sendMessage(`Successfully kicked user ${targetID} from the group.`, event.threadID);
       });
