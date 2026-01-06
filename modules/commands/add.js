@@ -1,6 +1,6 @@
 module.exports = {
   config: {
-    name: 'add',
+    name: 'ضيف',
     version: '1.0',
     author: 'Hridoy',
     countDown: 5,
