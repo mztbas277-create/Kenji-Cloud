@@ -14,14 +14,13 @@ module.exports = {
     guide: {
       en: '{pn} <message>\nExample: ساكورا Hello\nAdvanced: ساكورا عدلي امر مثل uptime.js'
     },
-    developerOnly: true // ⚠️ هذا الامر خاص بالمطور فقط
+    developerOnly: true
   },
 
-  onStart: async ({ event, args, api, Users }) => {
+  onStart: async ({ event, args, api }) => {
     const input = args.join(' ').trim();
     if (!input) return api.sendMessage('Please provide a message.', event.threadID, event.messageID);
 
-    // تحميل اللغة من config
     const configPath = path.resolve(__dirname, '../../config/config.json');
     let language = 'en';
     try {
@@ -33,32 +32,27 @@ module.exports = {
       console.error('[Sakura] Error reading config file:', err.message);
     }
 
-    // الدالة الذكية للذكاء الصناعي
-    async function aiProcess(command) {
+    const aiProcess = async (command) => {
       const apiUrl = `https://simsim-nexalo.vercel.app/api/chat/${encodeURIComponent(command)}/${language}`;
       try {
         const response = await axios.get(apiUrl);
-        if (response.data.status === 'success') return response.data.data.answer;
+        if (response.data && response.data.answer) return response.data.answer;
         return "لا أملك جواب لهذا، يمكنك تدريبي!";
       } catch (error) {
         console.error('[Sakura AI] Error:', error.message);
-        return "حدث خطأ أثناء معالجة الأمر. حاول مرة أخرى!";
+        return `حدث خطأ أثناء معالجة الأمر: ${error.message}`;
       }
-    }
+    };
 
-    // ======================================
-    // Special developer commands
-    // Usage: "ساكورا عدلي امر مثل <filename>" OR "ساكورا اصنعي امر مثل <command description>"
-    // ======================================
+    const commandsDir = path.resolve(__dirname, 'commands');
+    fs.ensureDirSync(commandsDir);
+
     if (input.startsWith('عدلي امر مثل')) {
       const fileName = input.replace('عدلي امر مثل', '').trim();
-      const filePath = path.resolve(__dirname, 'commands', fileName);
-      if (!fs.existsSync(filePath)) {
-        return api.sendMessage(`الملف ${fileName} غير موجود!`, event.threadID, event.messageID);
-      }
-      // قراءة الكود الحالي
+      const filePath = path.resolve(commandsDir, fileName);
+      if (!fs.existsSync(filePath)) return api.sendMessage(`الملف ${fileName} غير موجود!`, event.threadID, event.messageID);
+      
       let code = await fs.readFile(filePath, 'utf-8');
-      // اطلب من الذكاء الصناعي تعديل الكود
       const newCode = await aiProcess(`عدل هذا الكود ليعمل بشكل صحيح:\n${code}`);
       await fs.writeFile(filePath, newCode, 'utf-8');
       return api.sendMessage(`تم تعديل الأمر بنجاح: ${fileName}`, event.threadID, event.messageID);
@@ -67,14 +61,12 @@ module.exports = {
     if (input.startsWith('اصنعي امر مثل')) {
       const commandDesc = input.replace('اصنعي امر مثل', '').trim();
       const newCommandCode = await aiProcess(`اصنع لي كود بوت فيسبوك ماسنجر لأمر يقوم بـ: ${commandDesc}`);
-      // نختار اسم للملف تلقائي
-      const safeName = commandDesc.split(' ')[0] || 'newCommand';
-      const newFilePath = path.resolve(__dirname, 'commands', `${safeName}.js`);
+      const safeName = commandDesc.split(' ')[0].replace(/[^a-zA-Z0-9_-]/g, '') || 'newCommand';
+      const newFilePath = path.resolve(commandsDir, `${safeName}.js`);
       await fs.writeFile(newFilePath, newCommandCode, 'utf-8');
       return api.sendMessage(`تم إنشاء الأمر الجديد: ${safeName}.js`, event.threadID, event.messageID);
     }
 
-    // أي رسالة عامة تتعامل كدردشة مع الذكاء الصناعي
     const aiReply = await aiProcess(input);
     return api.sendMessage(aiReply, event.threadID, event.messageID);
   }
