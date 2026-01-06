@@ -20,7 +20,7 @@ module.exports = {
 
         const query = args.join(' ').trim();
         if (!query) {
-            return api.sendMessage('❌ Please provide a query. Example: !ai4 Tell me a story', threadID, messageID);
+            return api.sendMessage('❌ داير بقوت الصداقى ولا سنن •-•؟    ', threadID, messageID);
         }
 
         try {
@@ -39,7 +39,7 @@ module.exports = {
             }
         } catch (error) {
             console.error('AI4 error:', error.message);
-            api.sendMessage(`❌ Error: ${error.message}`, threadID, messageID);
+            api.sendMessage(`❌ خطاء: ${error.message}`, threadID, messageID);
         }
     },
 };
