@@ -37,13 +37,13 @@ module.exports = {
         }
 
         if (!imageUrl) {
-            return api.sendMessage("Please reply to an image or mention a user to enhance their profile picture.", event.threadID);
+            return api.sendMessage("رد على زول ولا اعمل منشى لتعديل صوره برفايله   .", event.threadID);
         }
 
         const apiUrl = `https://hridoy-apis.vercel.app/tools/remini?url=${encodeURIComponent(imageUrl)}&apikey=hridoyXQC`;
 
         try {
-            api.sendMessage("✅ | Enhancing image to 4K, please wait...", event.threadID);
+            api.sendMessage("✅ | جاري تحسين الصوره الرجاء الانتظار... ", event.threadID);
             console.log(`[API Request] Sending to: ${apiUrl}`);
             const response = await axios.get(apiUrl);
             console.log(`[API Response] Status: ${response.status}, Status Text: ${response.statusText}`);
