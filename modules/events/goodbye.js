@@ -14,6 +14,7 @@ module.exports = {
       const { logMessageData, threadID } = event;
       const ownUserID = api.getCurrentUserID();
 
+      // لو البوت هو اللي طلع، ما ترسل رسالة
       if (logMessageData.leftParticipantFbId === ownUserID) {
         return;
       }
@@ -21,17 +22,19 @@ module.exports = {
       const thread = await api.getThreadInfo(threadID);
       const leftUserID = logMessageData.leftParticipantFbId;
       const userInfo = await api.getUserInfo(leftUserID);
-      const userName = userInfo[leftUserID] ? userInfo[leftUserID].name : 'Someone';
-      const userImageUrl = `https://graph.facebook.com/${leftUserID}/picture?width=512&height=512&access_token=6628568379|c1e620fa708a1d5696fb991c1bde5662`;
-      const goodbyeText = `${userName} has left ${thread.threadName}!`;
+      const userName = userInfo[leftUserID] ? userInfo[leftUserID].name : 'شخص ما';
 
+      // رابط صورة المستخدم (بدون توكن — أكثر أمانًا)
+      const userImageUrl = `https://graph.facebook.com/${leftUserID}/picture?width=512&height=512`;
+
+      // نص الوداع بالعربي
+      const goodbyeText = `${userName} غادر مجموعة ${thread.threadName}!`;
 
       const apiUrl = `https://nexalo-api.vercel.app/api/goodbye-card?image=${encodeURIComponent(userImageUrl)}&username=${encodeURIComponent(userName)}&text=${encodeURIComponent(goodbyeText)}`;
-      console.log(`[API Request] Sending to: ${apiUrl}`);
+      console.log(`[طلب API] الإرسال إلى: ${apiUrl}`);
 
-   
       axios.interceptors.request.use(request => {
-        console.log('[API Request Details]', {
+        console.log('[تفاصيل طلب API]', {
           url: request.url,
           method: request.method,
           headers: request.headers,
@@ -39,14 +42,12 @@ module.exports = {
         });
         return request;
       }, error => {
-        console.log('[API Request Error]', error);
+        console.log('[خطأ في طلب API]', error);
         return Promise.reject(error);
       });
 
-
       const apiResponse = await axios.get(apiUrl, { responseType: 'arraybuffer' });
-      console.log(`[API Response] Status: ${apiResponse.status}, Status Text: ${apiResponse.statusText}`);
-
+      console.log(`[استجابة API] الحالة: ${apiResponse.status}, النص: ${apiResponse.statusText}`);
 
       const cacheDir = __dirname + '/cache';
       if (!fs.existsSync(cacheDir)) {
@@ -56,14 +57,14 @@ module.exports = {
       fs.writeFileSync(imagePath, Buffer.from(apiResponse.data, 'binary'));
 
       await api.sendMessage({
-        body: 'Goodbye!',
+        body: 'وداعًا! 👋',
         attachment: fs.createReadStream(imagePath)
       }, threadID, () => fs.unlinkSync(imagePath));
 
-      log('info', `Goodbye message sent to ${threadID} for user ${userName}`);
+      log('info', `تم إرسال رسالة وداع في المجموعة ${threadID} للمستخدم ${userName}`);
     } catch (error) {
-      console.log('[API Error]', error.message);
-      log('error', `Goodbye event error: ${error.message}`);
+      console.log('[خطأ API]', error.message);
+      log('error', `خطأ في حدث الوداع: ${error.message}`);
     }
   },
 };
