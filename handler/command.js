@@ -13,9 +13,9 @@ const loadCommands = () => {
     try {
       const command = require(path.join(commandPath, file));
       commands.set(command.config.name, command);
-      log('info', `Loaded command: ${command.config.name}`);
+      log('info', `تم تحميل الأمر: ${command.config.name}`);
     } catch (error) {
-      log('error', `Error loading command ${file}: ${error.message}`);
+      log('error', `خطأ عند تحميل الأمر ${file}: ${error.message}`);
     }
   }
   return commands;
@@ -23,35 +23,36 @@ const loadCommands = () => {
 
 const handleCommand = async ({ message, args, event, api, Users, Threads, commands }) => {
   try {
-    
+    if (!args || args.length === 0) return; // ✅ تصحيح: منع خطأ لو args فاضي
     const commandName = args[0].toLowerCase();
     const command = commands.get(commandName) || Array.from(commands.values()).find(cmd => cmd.config.aliases?.includes(commandName));
     if (!command) return;
-
 
     const userData = Users.get(event.senderID);
     if (userData && userData.isBanned) {
       return; 
     }
 
-    
+    // تحقق من وضع admin-only
     if (global.client.config.adminOnlyMode && !hasPermission(event.senderID, { adminOnly: true })) {
-      return api.sendMessage('Bot is currently in admin-only mode. Only bot administrators can use commands.', event.threadID);
+      return api.sendMessage('البوت في وضع المسؤولين فقط. فقط مسؤولي البوت يمكنهم استخدام الأوامر.', event.threadID);
     }
 
+    // تحقق من صلاحيات المستخدم للأمر
     if (!hasPermission(event.senderID, command.config, await api.getThreadInfo(event.threadID))) {
-      return api.sendMessage('You do not have permission to use this command.', event.threadID);
+      return api.sendMessage('ليس لديك صلاحية لاستخدام هذا الأمر.', event.threadID);
     }
 
+    // تحقق من الكولداون
     if (global.client.config.features.cooldown && !checkCooldown(event.senderID, command.config.name, command.config.countDown)) {
-      return api.sendMessage(`Please wait ${command.config.countDown} seconds before using this command again.`, event.threadID);
+      return api.sendMessage(`الرجاء الانتظار ${command.config.countDown} ثانية قبل استخدام هذا الأمر مرة أخرى.`, event.threadID);
     }
 
     await command.onStart({ message, args: args.slice(1), event, api, Users, Threads, config: global.client.config });
-    log('info', `Command executed: ${command.config.name} by user ${event.senderID}`);
+    log('info', `تم تنفيذ الأمر: ${command.config.name} بواسطة المستخدم ${event.senderID}`);
   } catch (error) {
-    log('error', `Command error: ${error.message}`);
-    api.sendMessage('An error occurred while executing the command.', event.threadID);
+    log('error', `خطأ في الأمر: ${error.message}`);
+    api.sendMessage('حدث خطأ أثناء تنفيذ الأمر.', event.threadID);
   }
 };
 
