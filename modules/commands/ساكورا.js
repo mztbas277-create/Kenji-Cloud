@@ -1,27 +1,45 @@
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const axios = require('axios');
 const fs = require('fs-extra');
 const path = require('path');
 
+const configs = require("../config.json");
+const log = require('../logger');
+const { getUser, getAllUsers } = require('../data/user');
+
 /* ===============================
-   1) قاموس تعريب الأوامر
+   إعدادات شخصية البوت
+================================ */
+const BOT_NAME = 'ساكورا';
+const BOT_CALL_REGEX = new RegExp(`^${BOT_NAME}(\\s+|،|$)`, 'i');
+
+/* ===============================
+   مفاتيح Gemini
+================================ */
+const API_KEYS = configs.ai_keys || [];
+let currentKeyIndex = 0;
+
+/* ===============================
+   ذاكرة المحادثات
+================================ */
+const conversationMemory = {};
+
+/* ===============================
+   تعريب الأوامر
 ================================ */
 const commandTranslations = {
   "help": "قائمة",
   "commands": "قائمة",
   "list": "قائمة",
-
   "create": "اصنعي امر مثل",
   "make": "اصنعي امر مثل",
   "new": "اصنعي امر مثل",
-
   "edit": "عدلي امر مثل",
   "update": "عدلي امر مثل",
-
   "delete": "احذف امر",
   "remove": "احذف امر"
 };
 
-// تعريب الأوامر
 function translateCommand(text) {
   let result = text;
   for (const key in commandTranslations) {
@@ -35,171 +53,231 @@ function translateCommand(text) {
 }
 
 /* ===============================
-   2) مترجم عام لأي نص → عربي
-   (يستخدم نفس API)
+   جلب بيانات المستخدم
 ================================ */
-async function translateToArabic(text) {
+async function getUserFullData(userID) {
   try {
-    const prompt = `ترجم النص التالي إلى اللغة العربية فقط بدون شرح:\n${text}`;
-    const apiUrl = `https://simsim-nexalo.vercel.app/api/chat/${encodeURIComponent(prompt)}/ar`;
-    const res = await axios.get(apiUrl);
-    if (res.data && res.data.answer) return res.data.answer;
-    return text;
-  } catch (e) {
-    console.error('[Translator] Error:', e.message);
-    return text; // لو فشل نرجع النص الأصلي
+    const userData = await getUser(userID);
+    if (userData) {
+      const displayName = userData.character?.name || userID;
+      return { displayName, userData };
+    }
+    return { displayName: userID, userData: null };
+  } catch {
+    return { displayName: userID, userData: null };
   }
 }
 
+async function getAllUser() {
+  const users = await getAllUsers();
+  return users || {};
+}
+
+/* ===============================
+   تعليمات النظام
+================================ */
+const SYSTEM_INSTRUCTION_TEMPLATE = (commandsJson, userDataJson, allusers) => `
+أنتِ فتاة اسمك "ساكورا".
+تردين دائمًا بالعربية فقط.
+أسلوبك مختصر وواضح.
+
+مهم جدًا:
+عند طلب إنشاء أو تعديل أمر:
+- أرجعي الكود فقط.
+- بدون شرح.
+- بدون نص إضافي.
+
+بيانات الأوامر:
+${commandsJson}
+
+بيانات المستخدم:
+${userDataJson}
+
+كل المستخدمين:
+${allusers}
+`;
+
+/* ===============================
+   التصدير
+================================ */
 module.exports = {
   config: {
     name: 'ساكورا',
-    version: '6.0',
-    author: 'Hridoy + Arabized',
+    version: '7.1',
+    author: 'Fixed Version',
     countDown: 5,
     prefix: false,
-    description: 'AI assistant fully arabized + girl personality',
-    category: 'ai',
-    guide: {
-      en: '{pn} <message>\nExamples:\n- ساكورا Hello\n- ساكورا عدلي امر مثل uptime.js\n- ساكورا اصنعي امر مثل لعبة\n- ساكورا احذف امر uptime.js\n- ساكورا قائمة'
-    },
-    developerOnly: false
+    description: 'AI girl assistant (Arabic) powered by Gemini',
+    category: 'ai'
   },
 
-  onStart: async ({ event, args, api }) => {
-    let input = args.join(' ').trim();
-    if (!input)
-      return api.sendMessage('الرجاء إدخال رسالة أو أمر.', event.threadID, event.messageID);
+  onStart: async ({ event, args, api, commands }) => {
+    try {
+      const threadID = event.threadID;
+      const senderID = event.senderID;
 
-    // 🔁 تعريب الأوامر تلقائيًا
-    input = translateCommand(input);
+      let input = args.join(' ').trim();
+      if (!input) return;
 
-    /* ===============================
-       3) أمر القائمة
-    ================================ */
-    if (input === 'قائمة') {
-      const helpMessage = `
-🌟 --- أوامر البوت ---
-[الدردشة] 🤖
-- ساكورا <رسالة> → الرد عليك مباشرة كشخصية AI بنت ودودة (عربي)
+      if (!BOT_CALL_REGEX.test(input)) return;
+      input = input.replace(BOT_CALL_REGEX, '').trim();
+      if (!input) return;
 
-[إنشاء الأوامر] ✨
+      input = translateCommand(input);
+
+      /* ===============================
+         أمر القائمة
+      ================================ */
+      if (input === 'قائمة') {
+        return api.sendMessage(
+`🌟 أوامر ساكورا
+- ساكورا <رسالة>
 - ساكورا اصنعي امر مثل <وصف>
-
-[تعديل الأوامر] 🛠️
 - ساكورا عدلي امر مثل <ملف>
-
-[حذف الأوامر] ❌
-- ساكورا احذف امر <ملف>
------------------------
-      `;
-      return api.sendMessage(helpMessage, event.threadID, event.messageID);
-    }
-
-    /* ===============================
-       4) إعداد اللغة = عربي دائمًا
-    ================================ */
-    const language = 'ar';
-
-    /* ===============================
-       5) الذكاء الاصطناعي (عربي فقط)
-    ================================ */
-    const aiProcess = async (command) => {
-      const prompt = `
-أنت شخصية فتاة لطيفة اسمها "ساكورا".
-تتكلمين دائمًا باللغة العربية فقط.
-أسلوبك ودود ومرح وتحبين مساعدة المستخدم.
-الرسالة من المستخدم:
-"${command}"
-      `;
-      const apiUrl = `https://simsim-nexalo.vercel.app/api/chat/${encodeURIComponent(prompt)}/${language}`;
-      try {
-        const response = await axios.get(apiUrl);
-        if (response.data && response.data.answer) {
-          // لو الرد طلع إنجليزي بالغلط نعرّبه
-          return await translateToArabic(response.data.answer);
-        }
-        return "ما قدرت أفهم سؤالك، ممكن توضحه لي أكتر؟ 😊";
-      } catch (error) {
-        console.error('[Sakura AI] Error:', error.message);
-        return `حصل خطأ تقني، حاول مرة تانية لاحقًا 🙏`;
+- ساكورا احذف امر <ملف>`,
+          threadID
+        );
       }
-    };
 
-    const commandsDir = path.resolve(__dirname, '../../commands');
-    fs.ensureDirSync(commandsDir);
+      /* ===============================
+         إعداد Gemini
+      ================================ */
+      const { displayName, userData } = await getUserFullData(senderID);
+      const allUsers = await getAllUser();
 
-    /* ===============================
-       6) تعديل أمر موجود
-    ================================ */
-    if (input.startsWith('عدلي امر مثل')) {
-      const fileName = input.replace('عدلي امر مثل', '').trim();
-      const filePath = path.resolve(commandsDir, fileName);
-
-      if (!fs.existsSync(filePath))
-        return api.sendMessage(`الملف ${fileName} غير موجود!`, event.threadID, event.messageID);
-
-      try {
-        let code = await fs.readFile(filePath, 'utf-8');
-        const newCode = await aiProcess(`عدلي هذا الكود ليعمل بشكل صحيح:\n${code}`);
-
-        if (!newCode || !newCode.includes('module.exports'))
-          return api.sendMessage('لم أستطع توليد كود صالح للتعديل 😥', event.threadID, event.messageID);
-
-        await fs.writeFile(filePath, newCode, 'utf-8');
-        return api.sendMessage(`تم تعديل الأمر بنجاح: ${fileName} ✅`, event.threadID, event.messageID);
-      } catch (err) {
-        return api.sendMessage(`حصل خطأ أثناء التعديل: ${err.message}`, event.threadID, event.messageID);
-      }
-    }
-
-    /* ===============================
-       7) إنشاء أمر جديد
-    ================================ */
-    if (input.startsWith('اصنعي امر مثل')) {
-      const commandDesc = input.replace('اصنعي امر مثل', '').trim();
-      const newCommandCode = await aiProcess(
-        `اصنعي كود لبوت فيسبوك ماسنجر لأمر يقوم بالآتي:\n${commandDesc}`
+      const SYSTEM_TEXT = SYSTEM_INSTRUCTION_TEMPLATE(
+        JSON.stringify(commands || {}, null, 2),
+        JSON.stringify(userData || {}, null, 2),
+        JSON.stringify(allUsers || {}, null, 2)
       );
 
-      const safeName =
-        commandDesc.split(' ')[0].replace(/[^a-zA-Z0-9_-]/g, '') || 'newCommand';
+      if (!conversationMemory[threadID])
+        conversationMemory[threadID] = [];
 
-      const newFilePath = path.resolve(commandsDir, `${safeName}.js`);
+      const formattedUserQuery = `${displayName}: ${input}`;
 
-      if (!newCommandCode || !newCommandCode.includes('module.exports'))
-        return api.sendMessage('لم أستطع إنشاء كود صالح 😥', event.threadID, event.messageID);
+      const aiProcess = async (text) => {
+        let attempts = 0;
 
-      try {
-        await fs.writeFile(newFilePath, newCommandCode, 'utf-8');
-        return api.sendMessage(`تم إنشاء الأمر الجديد: ${safeName}.js 🎉`, event.threadID, event.messageID);
-      } catch (err) {
-        return api.sendMessage(`حصل خطأ أثناء الإنشاء: ${err.message}`, event.threadID, event.messageID);
+        while (attempts < API_KEYS.length) {
+          const keyIndex = (currentKeyIndex + attempts) % API_KEYS.length;
+          const key = API_KEYS[keyIndex];
+
+          try {
+            const genAI = new GoogleGenerativeAI(key);
+            const model = genAI.getGenerativeModel({
+              model: "gemini-2.5-flash",
+              systemInstruction: SYSTEM_TEXT
+            });
+
+            const chat = model.startChat({
+              history: conversationMemory[threadID],
+              generationConfig: { temperature: 0.2 }
+            });
+
+            const result = await chat.sendMessage(text);
+            currentKeyIndex = (keyIndex + 1) % API_KEYS.length;
+
+            return result.response.text().trim();
+          } catch (e) {
+            log.warn(`Gemini key failed: ${e.message}`);
+            attempts++;
+          }
+        }
+
+        return null;
+      };
+
+      /* ===============================
+         مسار الأوامر الصحيح
+      ================================ */
+      const commandsDir = path.resolve(__dirname, './'); 
+      // لأن الملف نفسه داخل modules/commands
+
+      /* ===============================
+         تعديل أمر
+      ================================ */
+      if (input.startsWith('عدلي امر مثل')) {
+        const fileName = input.replace('عدلي امر مثل', '').trim();
+        const filePath = path.join(commandsDir, fileName);
+
+        if (!fs.existsSync(filePath))
+          return api.sendMessage(`الملف ${fileName} غير موجود!`, threadID);
+
+        const code = await fs.readFile(filePath, 'utf-8');
+        const newCode = await aiProcess(
+`عدلي الكود التالي.
+أرجعي كود JavaScript فقط يبدأ بـ module.exports
+${code}`
+        );
+
+        if (!newCode || !newCode.includes('module.exports'))
+          return api.sendMessage('فشل تعديل الأمر 😥', threadID);
+
+        await fs.writeFile(filePath, newCode, 'utf-8');
+        return api.sendMessage(`تم تعديل الأمر: ${fileName} ✅`, threadID);
       }
-    }
 
-    /* ===============================
-       8) حذف أمر
-    ================================ */
-    if (input.startsWith('احذف امر')) {
-      const fileName = input.replace('احذف امر', '').trim();
-      const filePath = path.resolve(commandsDir, fileName);
+      /* ===============================
+         إنشاء أمر
+      ================================ */
+      if (input.startsWith('اصنعي امر مثل')) {
+        const desc = input.replace('اصنعي امر مثل', '').trim();
 
-      if (!fs.existsSync(filePath))
-        return api.sendMessage(`الملف ${fileName} غير موجود!`, event.threadID, event.messageID);
+        const newCode = await aiProcess(
+`أنشئي أمر لبوت فيسبوك ماسنجر.
+أرجعي الكود فقط بدون شرح.
+يجب أن يحتوي على module.exports.
+الوصف:
+${desc}`
+        );
 
-      try {
+        if (!newCode || !newCode.includes('module.exports'))
+          return api.sendMessage('فشل إنشاء الأمر 😥', threadID);
+
+        const safeName =
+          desc.split(' ')[0].replace(/[^a-zA-Z0-9_-]/g, '') || 'newCommand';
+
+        const newFilePath = path.join(commandsDir, `${safeName}.js`);
+        await fs.writeFile(newFilePath, newCode, 'utf-8');
+
+        return api.sendMessage(`تم إنشاء الأمر: ${safeName}.js 🎉`, threadID);
+      }
+
+      /* ===============================
+         حذف أمر
+      ================================ */
+      if (input.startsWith('احذف امر')) {
+        const fileName = input.replace('احذف امر', '').trim();
+        const filePath = path.join(commandsDir, fileName);
+
+        if (!fs.existsSync(filePath))
+          return api.sendMessage(`الملف ${fileName} غير موجود!`, threadID);
+
         await fs.remove(filePath);
-        return api.sendMessage(`تم حذف الأمر: ${fileName} 🗑️`, event.threadID, event.messageID);
-      } catch (err) {
-        return api.sendMessage(`حصل خطأ أثناء الحذف: ${err.message}`, event.threadID, event.messageID);
+        return api.sendMessage(`تم حذف الأمر: ${fileName} 🗑️`, threadID);
       }
-    }
 
-    /* ===============================
-       9) أي رسالة أخرى → AI عربي
-    ================================ */
-    const aiReply = await aiProcess(input);
-    return api.sendMessage(aiReply, event.threadID, event.messageID);
+      /* ===============================
+         رد عادي
+      ================================ */
+      const aiReply = await aiProcess(formattedUserQuery);
+
+      if (!aiReply)
+        return api.sendMessage('حصل خطأ تقني 😥', threadID);
+
+      conversationMemory[threadID].push(
+        { role: "user", parts: [{ text: formattedUserQuery }] },
+        { role: "model", parts: [{ text: aiReply }] }
+      );
+
+      if (conversationMemory[threadID].length > 40)
+        conversationMemory[threadID] = conversationMemory[threadID].slice(-20);
+
+      return api.sendMessage(aiReply, threadID);
+
+    } catch (err) {
+      log.error("Sakura Handler Error: " + err.message);
+    }
   }
 };
