@@ -2,16 +2,16 @@ const axios = require('axios');
 
 module.exports = {
     config: {
-        name: 'zephyr',
+        name: 'سايفر', // اسم الأمر الآن عربي
         version: '1.0',
         author: 'Hridoy',
         countDown: 5,
         prefix: true,
         groupAdminOnly: false,
-        description: 'Chat with Zephyr AI.',
+        description: 'الدردشة مع الذكاء الاصطناعي سايفر.',
         category: 'ai',
         guide: {
-            en: '   {pn}zephyr <prompt>'
+            en: '   {pn}سايفر <نص الرسالة>'
         },
     },
     onStart: async ({ api, event, args }) => {
@@ -20,26 +20,26 @@ module.exports = {
 
         const prompt = args.join(' ').trim();
         if (!prompt) {
-            return api.sendMessage('❌ Please provide a prompt. Example: !zephyr Tell me a story', threadID, messageID);
+            return api.sendMessage('❌ الرجاء إدخال نص الرسالة. مثال: !سايفر احكي لي قصة', threadID, messageID);
         }
 
         try {
-            console.log(`Requesting Zephyr with prompt: ${prompt}`);
+            console.log(`طلب سايفر مع النص: ${prompt}`);
             const response = await axios.get(
                 `https://hridoy-apis.onrender.com/ai/zephyr?text=${encodeURIComponent(prompt)}`,
                 { timeout: 15000 }
             );
 
-            console.log('Zephyr response:', response.data);
+            console.log('استجابة سايفر:', response.data);
 
             if (response.data.status && response.data.result) {
                 api.sendMessage(response.data.result, threadID, messageID);
             } else {
-                throw new Error('Invalid response from Zephyr API');
+                throw new Error('استجابة غير صالحة من API سايفر');
             }
         } catch (error) {
-            console.error('Zephyr error:', error.message);
-            api.sendMessage(`❌ Error: ${error.message}`, threadID, messageID);
+            console.error('خطأ سايفر:', error.message);
+            api.sendMessage(`❌ خطأ: ${error.message}`, threadID, messageID);
         }
     },
 };
