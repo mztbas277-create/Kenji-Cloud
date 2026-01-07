@@ -12,7 +12,7 @@ function readDB(filePath) {
         if (error.code === 'ENOENT') {
             return {};
         }
-        console.error(`Error reading database at ${filePath}:`, error);
+        console.error(`خطأ عند قراءة قاعدة البيانات في ${filePath}:`, error);
         return {};
     }
 }
@@ -21,20 +21,20 @@ function writeDB(filePath, data) {
     try {
         fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
     } catch (error) {
-        console.error(`Error writing to database at ${filePath}:`, error);
+        console.error(`خطأ عند كتابة قاعدة البيانات في ${filePath}:`, error);
     }
 }
 
 module.exports = {
     config: {
-        name: 'work',
+        name: 'اشتغل', // تم تغيير اسم الأمر
         version: '1.0',
         author: 'Hridoy',
         aliases: ['w'],
-        countDown: 24 * 60 * 60, 
+        countDown: 24 * 60 * 60, // 24 ساعة
         prefix: true,
         groupAdminOnly: false,
-        description: 'Work to earn some money. Cooldown is 24 hours.',
+        description: 'اعمل لكسب المال. فترة الانتظار 24 ساعة.',
         category: 'economy',
         guide: {
             en: '   {pn}'
@@ -43,7 +43,7 @@ module.exports = {
 
     onStart: async ({ api, event }) => {
         const { senderID } = event;
-        const commandName = 'work';
+        const commandName = 'اشتغل';
 
         const cooldowns = readDB(cooldownsPath);
         const userCooldownKey = `${senderID}_${commandName}`;
@@ -59,12 +59,12 @@ module.exports = {
             const seconds = totalSeconds % 60;
 
             let timeString = '';
-            if (days > 0) timeString += `${days} day${days > 1 ? 's' : ''} `;
-            if (hours > 0) timeString += `${hours} hour${hours > 1 ? 's' : ''} `;
-            if (minutes > 0) timeString += `${minutes} minute${minutes > 1 ? 's' : ''} `;
-            if (seconds > 0) timeString += `${seconds} second${seconds > 1 ? 's' : ''}`;
+            if (days > 0) timeString += `${days} يوم `;
+            if (hours > 0) timeString += `${hours} ساعة `;
+            if (minutes > 0) timeString += `${minutes} دقيقة `;
+            if (seconds > 0) timeString += `${seconds} ثانية`;
 
-            return api.sendMessage(`🕒 You've already worked. Please wait ${timeString.trim()} before working again.`, event.threadID);
+            return api.sendMessage(`🕒 لقد عملت مسبقًا. الرجاء الانتظار ${timeString.trim()} قبل العمل مرة أخرى.`, event.threadID);
         }
 
         const userDB = readDB(userDBPath);
@@ -92,6 +92,6 @@ module.exports = {
         writeDB(userDBPath, userDB);
         writeDB(cooldownsPath, cooldowns);
 
-        return api.sendMessage(`💼 You worked hard and earned ${amount} coins.\n💰 Your new balance is ${userDB[senderID].balance} coins.`, event.threadID);
+        return api.sendMessage(`💼 لقد عملت بجد وربحت ${amount} عملة.\n💰 رصيدك الجديد هو ${userDB[senderID].balance} عملة.`, event.threadID);
     },
 };
