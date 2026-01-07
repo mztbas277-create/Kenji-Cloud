@@ -27,7 +27,7 @@ function writeDB(filePath, data) {
 
 module.exports = {
     config: {
-        name: 'اشتغل', // تم تغيير اسم الأمر
+        name: 'اشتغل', // اسم الأمر بالعربي
         version: '1.0',
         author: 'Hridoy',
         aliases: ['w'],
@@ -70,8 +70,19 @@ module.exports = {
         const userDB = readDB(userDBPath);
 
         if (!userDB[senderID]) {
+            // إضافة fallback للاسم لو ما رجع من API
+            let userName = 'عضو';
+            try {
+                const info = await api.getUserInfo(senderID);
+                if (info && info[senderID] && info[senderID].name) {
+                    userName = info[senderID].name;
+                }
+            } catch (e) {
+                console.log('تعذر الحصول على اسم المستخدم، سيتم استخدام "عضو"');
+            }
+
             userDB[senderID] = {
-                name: (await api.getUserInfo(senderID))[senderID].name,
+                name: userName,
                 joinDate: new Date().toISOString(),
                 messageCount: 0,
                 isAdmin: false,
